@@ -10,53 +10,6 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# League to league group mapping
-LEAGUE_GROUPS = {
-    'BELARUS': 'EURO-II',
-    'CZECHIA': 'EURO-I',
-    'DEL': 'EURO-II',
-    'KHL': 'EURO-I',
-    'LIGUE MAGNUS': 'EURO-II',
-    'LIIGA': 'EURO-I',
-    'NL': 'EURO-I',
-    'NORWAY': 'EURO-II',
-    'SHL': 'EURO-I',
-    'SLOVAKIA': 'EURO-II',
-    'BELARUS VYSSHAYA': 'EURO-III',
-    'CZECHIA2': 'EURO-II',
-    'HOCKEYALLSVENSKAN': 'EURO-II',
-    'MESTIS': 'EURO-II',
-    'MHL': 'EURO-II',
-    'SL': 'EURO-II',
-    'VHL': 'EURO-II',
-    'J20 NATIONELL': 'EURO-III',
-    'CZECH U20': 'EURO-III',
-    'HOCKEYETTAN': 'EURO-III',
-    'J18 NATIONELL': 'EURO-III',
-    'J18 REGION': 'EURO-III',
-    'RUSSIA U18': 'EURO-III',
-    'U20 SM-SARJA': 'EURO-III',
-    'U18 SM-SARJA': 'EURO-III',
-    'OHL': 'CAN-MJ',
-    'NCAA': 'NCAA',
-    'QMJHL': 'CAN-MJ',
-    'WHL': 'CAN-MJ',
-    'NTDP': 'USCAN-I',
-    'USHL': 'USCAN-I',
-    'OJHL': 'USCAN-II',
-    'AJHL': 'USCAN-II',
-    'BCHL': 'USCAN-II',
-    'CAHS': 'PREP',
-    'CISAA': 'PREP',
-    'MPHL': 'PREP',
-    'PHC': 'PREP',
-    'USHS-MN': 'PREP',
-    'USHS-MI': 'PREP',
-    'USHS-PREP': 'PREP',
-    'USPHL PREMIER': 'USCAN-II',
-    'U18 AAA': 'USCAN-II'
-}
-
 # Get the directory where this file is located
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -129,23 +82,61 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     pandas DataFrame
         The n_neighbors most similar player seasons with their stats
     """
-    # Get the league group for the given league
-    league_group = get_league_group(league)
+    # NHLe factors mapping
+    NHLE_FACTORS = {
+        'NHL': 1,
+        'KHL': 0.771732,
+        'CZECHIA': 0.582944,
+        'SHL': 0.565769,
+        'NL': 0.458792,
+        'LIIGA': 0.441241,
+        'AHL': 0.389427,
+        'DEL': 0.351879,
+        'HOCKEYALLSVENSKAN': 0.351322,
+        'HOCKEYETTAN': 0.351322,
+        'VHL': 0.328261,
+        'SLOVAKIA': 0.295397,
+        'CZECHIA2': 0.240439,
+        'NCAA': 0.193751,
+        'NORWAY': 0.172818,
+        'MESTIS': 0.177838,
+        'SL': 0.176281,
+        'OHL': 0.144065,
+        'MHL': 0.143426,
+        'USHL': 0.143111,
+        'WHL': 0.141272,
+        'RUSSIA U18': 0.032422,
+        'J20 NATIONELL': 0.091359,
+        'J18 NATIONELL': 0.037962,
+        'QMJHL': 0.112517,
+        'NTDP': 0.121427,
+        'U18 SM-SARJA': 0.03986,
+        'CZECH U20': 0.07382,
+        'J18 REGION': 0.029468,
+        'USHS-PREP': 0.028378,
+        'AJHL': 0.062462,
+        'U20 SM-SARJA': 0.083147,
+        'CAHS': 0.020197,
+        'CISAA': 0.02742,
+        'MPHL': 0.034798,
+        'OJHL': 0.034296,
+        'USPHL PREMIER': 0.04564,
+        'BCHL': 0.080136,
+        'USHS-MA': 0.028378,
+        'USHS-MN': 0.024125,
+        'USHS-MI': 0.028378,
+        'BELARUS': 0.242295,
+        'BELARUS VYSSHAYA': 0.052128,
+        'LIGUE MAGNUS': 0.250187,
+        'PHC': 0.124583,
+        'U18 AAA': 0.031348
+    }
     
-    if league_group == "UNKNOWN":
-        print(f"Warning: League '{league}' does not have a known league group mapping.")
-        return pd.DataFrame()
-    
-    # Make sure 'League Group' column exists in the dataframe 
-    # If it doesn't exist, create it from the 'League' column
-    if 'League Group' not in df.columns and 'League' in df.columns:
-        df['League Group'] = df['League'].apply(get_league_group)
-    
-    # Filter dataframe to only include players from the same league group and position
-    filtered_df = df[(df['League Group'] == league_group) & (df['Position'] == position)].copy()
+    # 1. Filter dataframe to only include players from the same position (removing league group filtering)
+    filtered_df = df[df['Position'] == position].copy()
     
     if len(filtered_df) < n_neighbors:
-        print(f"Warning: Only {len(filtered_df)} players found with league group={league_group} and position={position}")
+        print(f"Warning: Only {len(filtered_df)} players found with position={position}")
         if len(filtered_df) == 0:
             return pd.DataFrame()  # Return empty DataFrame if no matches
     
@@ -165,8 +156,21 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     input_gpg = g / gp if gp > 0 else 0
     input_apg = a / gp if gp > 0 else 0
     
-    # Select numerical features for comparison
-    features = ['GPG', 'APG', 'PPG', 'Ht', 'Wt']
+    # 2. Add NHLe factor to the filtered dataframe
+    filtered_df['NHLe'] = filtered_df['League'].apply(
+        lambda x: NHLE_FACTORS.get(x, 0.1) if isinstance(x, str) else 0.1  # Default to 0.1 if not found
+    )
+    
+    # Get NHLe factor for input player
+    input_nhle = NHLE_FACTORS.get(league, 0.1) if isinstance(league, str) else 0.1
+    
+    # 3. Add League Match feature (1 if same league, 0 if different)
+    filtered_df['League_Match'] = filtered_df['League'].apply(
+        lambda x: 1 if x == league else 0
+    )
+    
+    # Select numerical features for comparison, including NHLe and League_Match
+    features = ['GPG', 'APG', 'PPG', 'NHLe', 'League_Match', 'Ht', 'Wt']
     X = filtered_df[features].copy()
     
     # Handle missing values - fill with median which is more robust than mean
@@ -180,7 +184,7 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
         filtered_df = filtered_df.loc[X.index]
         
         if len(X) == 0:
-            print(f"Error: No valid data points remain for league group={league_group} and position={position}")
+            print(f"Error: No valid data points remain for position={position}")
             return pd.DataFrame()
         
         if len(X) < n_neighbors:
@@ -191,8 +195,9 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Create input player vector and scale it
-    input_player = np.array([[input_gpg, input_apg, ppg, ht, wt]])
+    # Create input player vector (including NHLe and League_Match) and scale it
+    # League_Match is always 1 for self-comparison
+    input_player = np.array([[input_gpg, input_apg, ppg, input_nhle, 1, ht, wt]])
     input_player_scaled = scaler.transform(input_player)
     
     # Find nearest neighbors
@@ -221,11 +226,11 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     result['Input_Ht'] = ht
     result['Input_Wt'] = wt
     result['Input_League'] = league
-    result['Input_League_Group'] = league_group
     
     # Select relevant columns for display
-    display_cols = ['Player Name', 'Draft Year', 'Draft Round', 'Draft Overall Pick', 'League', 'League Group', 
-                    'Position', 'GP', 'G', 'A', 'Points', 'GPG', 'APG', 'PPG', 'Ht', 'Wt', 'Similarity_Score']
+    display_cols = ['Player Name', 'Draft Year', 'Draft Round', 'Draft Overall Pick', 'League', 
+                   'Position', 'GP', 'G', 'A', 'Points', 'GPG', 'APG', 'PPG', 'Ht', 'Wt', 
+                   'Similarity_Score']
     
     # Make sure all requested columns exist in the result
     existing_cols = [col for col in display_cols if col in result.columns]
