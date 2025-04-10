@@ -47,7 +47,7 @@ def get_league_group(league):
         return "UNKNOWN"
     return LEAGUE_GROUPS.get(league.upper(), "UNKNOWN")
 
-def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_neighbors=3):
+def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_neighbors=6):
     """
     Find the most similar player seasons based on provided stats,
     using Goals per Game and Assists per Game instead of raw totals.
