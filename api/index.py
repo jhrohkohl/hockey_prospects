@@ -1,6 +1,9 @@
-from flask import Flask, Response, request
-import app
+from flask import Flask, request, jsonify
 
-def handler(request, context):
-    """Handle requests in the Vercel Functions format."""
-    return app.app(request)
+app = Flask(__name__)
+
+@app.route('/api/similar-players', methods=['POST'])
+def find_similar_players_route():
+    data = request.get_json()
+    # Call your find_similar_players logic here
+    return jsonify({"message": "Success!", "received": data})
