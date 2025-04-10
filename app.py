@@ -10,21 +10,115 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Get the directory where this file is located
-current_dir = os.path.dirname(os.path.abspath(__file__))
+# League to league group mapping
+LEAGUE_GROUPS = {
+    'BELARUS': 'EURO-II',
+    'CZECHIA': 'EURO-I',
+    'DEL': 'EURO-II',
+    'KHL': 'EURO-I',
+    'LIGUE MAGNUS': 'EURO-II',
+    'LIIGA': 'EURO-I',
+    'NL': 'EURO-I',
+    'NORWAY': 'EURO-II',
+    'SHL': 'EURO-I',
+    'SLOVAKIA': 'EURO-II',
+    'BELARUS VYSSHAYA': 'EURO-III',
+    'CZECHIA2': 'EURO-II',
+    'HOCKEYALLSVENSKAN': 'EURO-II',
+    'MESTIS': 'EURO-II',
+    'MHL': 'EURO-II',
+    'SL': 'EURO-II',
+    'VHL': 'EURO-II',
+    'J20 NATIONELL': 'EURO-III',
+    'CZECH U20': 'EURO-III',
+    'HOCKEYETTAN': 'EURO-III',
+    'J18 NATIONELL': 'EURO-III',
+    'J18 REGION': 'EURO-III',
+    'RUSSIA U18': 'EURO-III',
+    'U20 SM-SARJA': 'EURO-III',
+    'U18 SM-SARJA': 'EURO-III',
+    'OHL': 'CAN-MJ',
+    'NCAA': 'NCAA',
+    'QMJHL': 'CAN-MJ',
+    'WHL': 'CAN-MJ',
+    'NTDP': 'USCAN-I',
+    'USHL': 'USCAN-I',
+    'OJHL': 'USCAN-II',
+    'AJHL': 'USCAN-II',
+    'BCHL': 'USCAN-II',
+    'CAHS': 'PREP',
+    'CISAA': 'PREP',
+    'MPHL': 'PREP',
+    'PHC': 'PREP',
+    'USHS-MN': 'PREP',
+    'USHS-MI': 'PREP',
+    'USHS-PREP': 'PREP',
+    'USPHL PREMIER': 'USCAN-II',
+    'U18 AAA': 'USCAN-II'
+}
 
-# Try multiple possible filenames
-possible_filenames = ['d0.csv', 'd0.xlsx', 'd0', 'd0.xls']
-CSV_FILE_PATH = None
+# Improved file loading logic
+def find_data_file():
+    """
+    Find the data file using multiple search strategies.
+    
+    Returns:
+    --------
+    str
+        Path to the data file, or None if not found
+    """
+    # Get various possible directories
+    current_file_path = os.path.abspath(__file__)
+    current_dir = os.path.dirname(current_file_path)
+    working_dir = os.getcwd()
+    
+    # Possible file names
+    possible_filenames = ['d0.csv', 'd0.xlsx', 'd0', 'd0.xls']
+    
+    # Possible locations to search
+    search_dirs = [
+        current_dir,                          # Directory of this script
+        working_dir,                          # Current working directory
+        os.path.join(current_dir, 'data'),    # data subdirectory of script dir
+        os.path.join(working_dir, 'data'),    # data subdirectory of working dir
+        os.path.join(os.path.dirname(current_dir), 'data')  # Parent dir's data folder
+    ]
+    
+    # Also check if path is provided via environment variable
+    env_path = os.environ.get('CSV_PATH')
+    if env_path and os.path.exists(env_path):
+        print(f"Found data file from environment variable: {env_path}")
+        return env_path
+    
+    # Try all combinations of directories and filenames
+    for directory in search_dirs:
+        if os.path.exists(directory):
+            print(f"Searching in directory: {directory}")
+            for filename in possible_filenames:
+                potential_path = os.path.join(directory, filename)
+                if os.path.exists(potential_path):
+                    print(f"Found data file: {potential_path}")
+                    return potential_path
+        else:
+            print(f"Directory does not exist: {directory}")
+    
+    # If we can't find the file, also try hardcoded paths for common locations
+    hardcoded_paths = [
+        r'C:\Users\jhroh\Desktop\player-similarity-api\d0.csv',
+        r'/app/d0.csv',  # For Docker/container environments
+    ]
+    
+    for path in hardcoded_paths:
+        if os.path.exists(path):
+            print(f"Found data file at hardcoded path: {path}")
+            return path
+    
+    print("Data file not found after trying all possible locations")
+    return None
 
-for filename in possible_filenames:
-    potential_path = os.path.join(current_dir, filename)
-    if os.path.exists(potential_path):
-        CSV_FILE_PATH = potential_path
-        break
-
-if CSV_FILE_PATH is None:
-    CSV_FILE_PATH = os.path.join(current_dir, 'd0')  # Default to 'd0' if nothing found
+# Find the data file
+CSV_FILE_PATH = find_data_file()
+print(f"Selected data file path: {CSV_FILE_PATH}")
 
 # Global variable to store the loaded dataframe
 player_data = None
@@ -244,15 +338,42 @@ def load_player_data():
     try:
         print(f"Attempting to load data from: {CSV_FILE_PATH}")
         
+        if CSV_FILE_PATH is None:
+            print("Error: CSV_FILE_PATH is None. No data file found.")
+            return None
+            
         # Check file extension to determine how to load it
         if CSV_FILE_PATH.endswith('.xlsx') or CSV_FILE_PATH.endswith('.xls'):
             # Load Excel file
             df = pd.read_excel(CSV_FILE_PATH)
         else:
             # Try loading as CSV
-            df = pd.read_csv(CSV_FILE_PATH)
+            try:
+                # First try with default settings
+                df = pd.read_csv(CSV_FILE_PATH)
+            except Exception as e:
+                print(f"Error with default CSV load: {e}")
+                # Try with different encodings and separators
+                encodings = ['utf-8', 'latin1', 'ISO-8859-1']
+                separators = [',', ';', '\t']
+                
+                for encoding in encodings:
+                    for sep in separators:
+                        try:
+                            print(f"Trying with encoding {encoding} and separator '{sep}'")
+                            df = pd.read_csv(CSV_FILE_PATH, encoding=encoding, sep=sep)
+                            print("Success!")
+                            break
+                        except Exception as e:
+                            print(f"Failed with encoding {encoding} and separator '{sep}': {e}")
+                    else:
+                        continue
+                    break
+                else:
+                    raise Exception("Could not load CSV with any combination of encoding and separator")
         
         print(f"Successfully loaded data with {len(df)} rows and {len(df.columns)} columns")
+        print(f"Columns: {df.columns.tolist()}")
         
         # Make sure 'League Group' column exists
         if 'League Group' not in df.columns and 'League' in df.columns:
@@ -272,6 +393,8 @@ def index():
         "status": "ok",
         "message": "Player Similarity API is running",
         "file_path": CSV_FILE_PATH,
+        "file_exists": CSV_FILE_PATH is not None and os.path.exists(CSV_FILE_PATH),
+        "working_dir": os.getcwd(),
         "endpoints": {
             "/api/league-groups": "GET - Get league to league group mappings",
             "/api/similar-players": "POST - Find similar players",
@@ -409,11 +532,10 @@ if __name__ == '__main__':
     player_data = load_player_data()
     
     if player_data is None:
-        print(f"Error: Could not load player data from {CSV_FILE_PATH}")
+        print(f"Error: Could not load player data.")
         print("Make sure the CSV file exists and has the required columns.")
-        exit(1)
-    
-    print(f"Successfully loaded {len(player_data)} player records.")
+    else:
+        print(f"Successfully loaded {len(player_data)} player records.")
     
     # Start the Flask application
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
