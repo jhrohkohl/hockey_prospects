@@ -139,7 +139,9 @@ def get_league_avg_age(league):
         return 20.0
     return LEAGUE_AVG_AGE.get(league.upper(), 20.0)
 
+
 def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, n_neighbors=6):
+
     """
     Find the most similar player seasons based on provided stats,
     using Goals per Game and Assists per Game instead of raw totals.
@@ -584,5 +586,7 @@ if __name__ == '__main__':
     # Start the Flask application
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 else:
+
     # Load data when module is imported (for production use on Render)
     player_data = load_player_data()
+
