@@ -138,13 +138,11 @@ def get_league_avg_age(league):
     return LEAGUE_AVG_AGE.get(league.upper(), 20.0)
 
 
-
-def find_similar_players_dual_approach(df, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15):
-
+def find_similar_players_dual_approach(df, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, draft_overall_pick=None):
     """
     Find similar players using two different approaches:
-    1. Find 3 most similar players from the SAME league using [GPG, APG, PPG, Ht, Wt, Age Relative to Sep 15]
-    2. Find 3 most similar players from DIFFERENT leagues using [GPG, APG, PPG, NHLe, Ht, Wt, Age Relative to Sep 15, League_Avg_Age]
+    1. Find 3 most similar players from the SAME league using [GPG, APG, PPG, Ht, Wt, Age Relative to Sep 15, Draft Overall Pick]
+    2. Find 3 most similar players from DIFFERENT leagues using [GPG, APG, PPG, NHLe, Ht, Wt, Age Relative to Sep 15, League_Avg_Age, Draft Overall Pick]
     
     Parameters:
     -----------
@@ -170,6 +168,8 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
         Weight in pounds
     age_rel_sep15 : float
         Player's age relative to September 15th
+    draft_overall_pick : int, optional
+        Player's overall draft position
     
     Returns:
     --------
@@ -264,10 +264,21 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
         print("Warning: 'Age Relative to Sep 15' column not found in dataframe. Using placeholder values.")
         position_filtered_df['Age Relative to Sep 15'] = 20.0  # Default placeholder
     
+    # Make sure 'Draft Overall Pick' is numeric and handle NaN values
+    if 'Draft Overall Pick' in position_filtered_df.columns:
+        position_filtered_df['Draft Overall Pick'] = pd.to_numeric(position_filtered_df['Draft Overall Pick'], errors='coerce')
+    else:
+        print("Warning: 'Draft Overall Pick' column not found in dataframe. Using placeholder values.")
+        position_filtered_df['Draft Overall Pick'] = 999  # Default placeholder for undrafted
+    
     # APPROACH 1: Same league analysis
     #----------------------------------
     same_league_df = position_filtered_df[position_filtered_df['League'] == league].copy()
     same_league_features = ['GPG', 'APG', 'PPG', 'Ht', 'Wt', 'Age Relative to Sep 15']
+    
+    # Add Draft Overall Pick to features if provided
+    if draft_overall_pick is not None:
+        same_league_features.append('Draft Overall Pick')
     
     # Only proceed if we have enough data points
     same_league_results = pd.DataFrame()
@@ -305,6 +316,8 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
                     input_vector_same.append(wt)
                 elif feature == 'Age Relative to Sep 15':
                     input_vector_same.append(age_rel_sep15)
+                elif feature == 'Draft Overall Pick':
+                    input_vector_same.append(draft_overall_pick if draft_overall_pick is not None else 999)
                 else:
                     input_vector_same.append(0)
             
@@ -330,6 +343,10 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
     #--------------------------------------
     diff_league_df = position_filtered_df[position_filtered_df['League'] != league].copy()
     diff_league_features = ['GPG', 'APG', 'PPG', 'NHLe', 'Ht', 'Wt', 'Age Relative to Sep 15', 'League_Avg_Age']
+    
+    # Add Draft Overall Pick to features if provided
+    if draft_overall_pick is not None:
+        diff_league_features.append('Draft Overall Pick')
     
     # Only proceed if we have enough data points
     diff_league_results = pd.DataFrame()
@@ -371,6 +388,8 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
                     input_vector_diff.append(age_rel_sep15)
                 elif feature == 'League_Avg_Age':
                     input_vector_diff.append(input_league_avg_age)
+                elif feature == 'Draft Overall Pick':
+                    input_vector_diff.append(draft_overall_pick if draft_overall_pick is not None else 999)
                 else:
                     input_vector_diff.append(0)
             
@@ -433,6 +452,8 @@ def find_similar_players_dual_approach(df, league, position, gp, g, a, points, p
     combined_results['Input_League'] = league
     combined_results['Input_Age_Rel_Sep15'] = age_rel_sep15
     combined_results['Input_League_Avg_Age'] = input_league_avg_age
+    if draft_overall_pick is not None:
+        combined_results['Input_Draft_Overall_Pick'] = draft_overall_pick
     
     # Select relevant columns for display
     display_cols = ['Player Name', 'Draft Year', 'Draft Round', 'Draft Overall Pick', 'League', 
@@ -545,6 +566,7 @@ def similar_players():
     - ht: float
     - wt: int
     - age_rel_sep15: float
+    - draft_overall_pick: int (optional)
     
     Returns:
     --------
@@ -582,9 +604,17 @@ def similar_players():
         wt = int(data['wt'])
         age_rel_sep15 = float(data['age_rel_sep15'])
         
+        # Get optional draft overall pick parameter
+        draft_overall_pick = None
+        if 'draft_overall_pick' in data and data['draft_overall_pick'] is not None:
+            try:
+                draft_overall_pick = int(data['draft_overall_pick'])
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid draft_overall_pick value: {data['draft_overall_pick']}")
+        
         # Find similar players using the dual approach
         result = find_similar_players_dual_approach(
-            player_data, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15
+            player_data, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, draft_overall_pick
         )
         
         # Convert to JSON-serializable format
@@ -654,7 +684,5 @@ if __name__ == '__main__':
     # Start the Flask application
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 else:
-
     # Load data when module is imported (for production use on Render)
     player_data = load_player_data()
-
