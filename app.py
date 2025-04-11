@@ -10,51 +10,53 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# League to league group mapping
-LEAGUE_GROUPS = {
-    'BELARUS': 'EURO-II',
-    'CZECHIA': 'EURO-I',
-    'DEL': 'EURO-II',
-    'KHL': 'EURO-I',
-    'LIGUE MAGNUS': 'EURO-II',
-    'LIIGA': 'EURO-I',
-    'NL': 'EURO-I',
-    'NORWAY': 'EURO-II',
-    'SHL': 'EURO-I',
-    'SLOVAKIA': 'EURO-II',
-    'BELARUS VYSSHAYA': 'EURO-III',
-    'CZECHIA2': 'EURO-II',
-    'HOCKEYALLSVENSKAN': 'EURO-II',
-    'MESTIS': 'EURO-II',
-    'MHL': 'EURO-II',
-    'SL': 'EURO-II',
-    'VHL': 'EURO-II',
-    'J20 NATIONELL': 'EURO-III',
-    'CZECH U20': 'EURO-III',
-    'HOCKEYETTAN': 'EURO-III',
-    'J18 NATIONELL': 'EURO-III',
-    'J18 REGION': 'EURO-III',
-    'RUSSIA U18': 'EURO-III',
-    'U20 SM-SARJA': 'EURO-III',
-    'U18 SM-SARJA': 'EURO-III',
-    'OHL': 'CAN-MJ',
-    'NCAA': 'NCAA',
-    'QMJHL': 'CAN-MJ',
-    'WHL': 'CAN-MJ',
-    'NTDP': 'USCAN-I',
-    'USHL': 'USCAN-I',
-    'OJHL': 'USCAN-II',
-    'AJHL': 'USCAN-II',
-    'BCHL': 'USCAN-II',
-    'CAHS': 'PREP',
-    'CISAA': 'PREP',
-    'MPHL': 'PREP',
-    'PHC': 'PREP',
-    'USHS-MN': 'PREP',
-    'USHS-MI': 'PREP',
-    'USHS-PREP': 'PREP',
-    'USPHL PREMIER': 'USCAN-II',
-    'U18 AAA': 'USCAN-II'
+# League average age mapping
+LEAGUE_AVG_AGE = {
+    'DEL': 28.15,
+    'NL': 27.69,
+    'CZECHIA': 27.4,
+    'LIGUE MAGNUS': 26.59,
+    'SHL': 26.26,
+    'KHL': 26.24,
+    'SLOVAKIA': 26.14,
+    'LIIGA': 25.83,
+    'CZECHIA2': 25.8,
+    'NORWAY': 25.33,
+    'HOCKEYALLSVENSKAN': 25.17,
+    'BELARUS': 24.94,
+    'AHL': 24.59,
+    'SL': 24.52,
+    'VHL': 23.82,
+    'MESTIS': 23.55,
+    'HOCKEYETTAN': 23.07,
+    'NCAA': 22.08,
+    'BCHL': 18.97,
+    'USPHL PREMIER': 18.9,
+    'AJHL': 18.84,
+    'U20 SM-SARJA': 18.83,
+    'BELARUS VYSSHAYA': 18.59,
+    'QMJHL': 18.53,
+    'OJHL': 18.49,
+    'USHL': 18.4,
+    'OHL': 18.35,
+    'MHL': 18.34,
+    'CZECH U20': 18.26,
+    'WHL': 18.23,
+    'J20 NATIONELL': 18.21,
+    'CISAA': 17.6,
+    'USHS-PREP': 17.24,
+    'USHS-MI': 17.17,
+    'USHS-MN': 17.13,
+    'MPHL': 17.08,
+    'NTDP': 17.02,
+    'U18 AAA': 16.86,
+    'CAHS': 16.73,
+    'U18 SM-SARJA': 16.72,
+    'RUSSIA U18': 16.7,
+    'J18 REGION': 16.61,
+    'USHS-MA': 16.59,
+    'J18 NATIONELL': 16.56,
+    'PHC': 17.08  # Assuming same as MPHL since it wasn't in the list
 }
 
 # Improved file loading logic
@@ -81,10 +83,9 @@ def find_data_file():
         working_dir,                          # Current working directory
         os.path.join(current_dir, 'data'),    # data subdirectory of script dir
         os.path.join(working_dir, 'data'),    # data subdirectory of working dir
-        os.path.join(os.path.dirname(current_dir), 'data')  # Parent dir's data folder
     ]
     
-    # Also check if path is provided via environment variable
+    # First check if path is provided via environment variable (for Render deployment)
     env_path = os.environ.get('CSV_PATH')
     if env_path and os.path.exists(env_path):
         print(f"Found data file from environment variable: {env_path}")
@@ -102,16 +103,11 @@ def find_data_file():
         else:
             print(f"Directory does not exist: {directory}")
     
-    # If we can't find the file, also try hardcoded paths for common locations
-    hardcoded_paths = [
-        r'C:\Users\jhroh\Desktop\player-similarity-api\d0.csv',
-        r'/app/d0.csv',  # For Docker/container environments
-    ]
-    
-    for path in hardcoded_paths:
-        if os.path.exists(path):
-            print(f"Found data file at hardcoded path: {path}")
-            return path
+    # For Docker/container environments (like Render)
+    container_path = '/app/d0.csv'
+    if os.path.exists(container_path):
+        print(f"Found data file at container path: {container_path}")
+        return container_path
     
     print("Data file not found after trying all possible locations")
     return None
@@ -123,9 +119,11 @@ print(f"Selected data file path: {CSV_FILE_PATH}")
 # Global variable to store the loaded dataframe
 player_data = None
 
-def get_league_group(league):
+# No league group functionality needed
+
+def get_league_avg_age(league):
     """
-    Get the league group for a given league.
+    Get the average age for a given league.
     
     Parameters:
     -----------
@@ -134,17 +132,18 @@ def get_league_group(league):
     
     Returns:
     --------
-    str
-        The corresponding league group
+    float
+        The average age for the league, or 20.0 as default if unknown
     """
     if not isinstance(league, str):
-        return "UNKNOWN"
-    return LEAGUE_GROUPS.get(league.upper(), "UNKNOWN")
+        return 20.0
+    return LEAGUE_AVG_AGE.get(league.upper(), 20.0)
 
-def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_neighbors=3):
+def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, n_neighbors=6):
     """
     Find the most similar player seasons based on provided stats,
     using Goals per Game and Assists per Game instead of raw totals.
+    Also includes league average age and player's age relative to Sep 15.
     
     Parameters:
     -----------
@@ -168,7 +167,9 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
         Height in inches
     wt : int
         Weight in pounds
-    n_neighbors : int, default=3
+    age_rel_sep15 : float
+        Player's age relative to September 15th
+    n_neighbors : int, default=6
         Number of similar players to return
     
     Returns:
@@ -255,20 +256,36 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
         lambda x: NHLE_FACTORS.get(x, 0.1) if isinstance(x, str) else 0.1  # Default to 0.1 if not found
     )
     
-    # Get NHLe factor for input player
-    input_nhle = NHLE_FACTORS.get(league, 0.1) if isinstance(league, str) else 0.1
+    # 3. Add league average age to the filtered dataframe
+    filtered_df['League_Avg_Age'] = filtered_df['League'].apply(get_league_avg_age)
     
-    # 3. Add League Match feature (1 if same league, 0 if different)
+    # Get NHLe factor and league average age for input player
+    input_nhle = NHLE_FACTORS.get(league, 0.1) if isinstance(league, str) else 0.1
+    input_league_avg_age = get_league_avg_age(league)
+    
+    # 4. Add League Match feature (1 if same league, 0 if different)
     filtered_df['League_Match'] = filtered_df['League'].apply(
         lambda x: 1 if x == league else 0
     )
     
-    # Select numerical features for comparison, including NHLe and League_Match
-    features = ['GPG', 'APG', 'PPG', 'NHLe', 'League_Match', 'Ht', 'Wt']
-    X = filtered_df[features].copy()
+    # Select numerical features for comparison, including NHLe, League_Match, Age Relative to Sep 15, and League Avg Age
+    features = ['GPG', 'APG', 'PPG', 'NHLe', 'League_Match', 'Ht', 'Wt', 'Age Relative to Sep 15', 'League_Avg_Age']
+    
+    # Make sure 'Age Relative to Sep 15' exists in the dataframe
+    if 'Age Relative to Sep 15' not in filtered_df.columns:
+        print("Warning: 'Age Relative to Sep 15' column not found in dataframe. Using placeholder values.")
+        filtered_df['Age Relative to Sep 15'] = 20.0  # Default placeholder
+    
+    # Select columns that actually exist in the dataframe
+    available_features = [f for f in features if f in filtered_df.columns]
+    if len(available_features) < len(features):
+        missing_features = [f for f in features if f not in filtered_df.columns]
+        print(f"Warning: Some features are missing: {missing_features}")
+    
+    X = filtered_df[available_features].copy()
     
     # Handle missing values - fill with median which is more robust than mean
-    for feature in features:
+    for feature in available_features:
         X[feature] = X[feature].fillna(X[feature].median())
     
     # Check if we still have NaN values after imputation
@@ -289,9 +306,32 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Create input player vector (including NHLe and League_Match) and scale it
-    # League_Match is always 1 for self-comparison
-    input_player = np.array([[input_gpg, input_apg, ppg, input_nhle, 1, ht, wt]])
+    # Create input player vector (including all features) and scale it
+    input_vector = []
+    for feature in available_features:
+        if feature == 'GPG':
+            input_vector.append(input_gpg)
+        elif feature == 'APG':
+            input_vector.append(input_apg)
+        elif feature == 'PPG':
+            input_vector.append(ppg)
+        elif feature == 'NHLe':
+            input_vector.append(input_nhle)
+        elif feature == 'League_Match':
+            input_vector.append(1)  # Always 1 for self-comparison
+        elif feature == 'Ht':
+            input_vector.append(ht)
+        elif feature == 'Wt':
+            input_vector.append(wt)
+        elif feature == 'Age Relative to Sep 15':
+            input_vector.append(age_rel_sep15)
+        elif feature == 'League_Avg_Age':
+            input_vector.append(input_league_avg_age)
+        else:
+            # Default value for any other feature
+            input_vector.append(0)
+    
+    input_player = np.array([input_vector])
     input_player_scaled = scaler.transform(input_player)
     
     # Find nearest neighbors
@@ -320,11 +360,13 @@ def find_similar_players(df, league, position, gp, g, a, points, ppg, ht, wt, n_
     result['Input_Ht'] = ht
     result['Input_Wt'] = wt
     result['Input_League'] = league
+    result['Input_Age_Rel_Sep15'] = age_rel_sep15
+    result['Input_League_Avg_Age'] = input_league_avg_age
     
     # Select relevant columns for display
     display_cols = ['Player Name', 'Draft Year', 'Draft Round', 'Draft Overall Pick', 'League', 
                    'Position', 'GP', 'G', 'A', 'Points', 'GPG', 'APG', 'PPG', 'Ht', 'Wt', 
-                   'Similarity_Score']
+                   'Age Relative to Sep 15', 'Similarity_Score']
     
     # Make sure all requested columns exist in the result
     existing_cols = [col for col in display_cols if col in result.columns]
@@ -375,10 +417,12 @@ def load_player_data():
         print(f"Successfully loaded data with {len(df)} rows and {len(df.columns)} columns")
         print(f"Columns: {df.columns.tolist()}")
         
-        # Make sure 'League Group' column exists
-        if 'League Group' not in df.columns and 'League' in df.columns:
-            df['League Group'] = df['League'].apply(get_league_group)
+        # No need to add League Group column anymore
         
+        # Add League Avg Age column if it doesn't exist
+        if 'League_Avg_Age' not in df.columns and 'League' in df.columns:
+            df['League_Avg_Age'] = df['League'].apply(get_league_avg_age)
+            
         # Return the loaded DataFrame
         return df
         
@@ -396,22 +440,22 @@ def index():
         "file_exists": CSV_FILE_PATH is not None and os.path.exists(CSV_FILE_PATH),
         "working_dir": os.getcwd(),
         "endpoints": {
-            "/api/league-groups": "GET - Get league to league group mappings",
             "/api/similar-players": "POST - Find similar players",
-            "/api/data-info": "GET - Get information about the loaded data"
+            "/api/data-info": "GET - Get information about the loaded data",
+            "/api/league-ages": "GET - Get average ages for each league"
         }
     })
 
-@app.route('/api/league-groups', methods=['GET'])
-def get_league_groups():
+@app.route('/api/league-ages', methods=['GET'])
+def get_league_ages():
     """
-    Get the mapping of leagues to league groups.
+    Get the mapping of leagues to their average ages.
     
     Returns:
     --------
     JSON response with mapping
     """
-    return jsonify(LEAGUE_GROUPS)
+    return jsonify(LEAGUE_AVG_AGE)
 
 @app.route('/api/similar-players', methods=['POST'])
 def similar_players():
@@ -428,7 +472,8 @@ def similar_players():
     - ppg: float
     - ht: float
     - wt: int
-    - n_neighbors: int (optional, default=3)
+    - age_rel_sep15: float
+    - n_neighbors: int (optional, default=6)
     
     Returns:
     --------
@@ -448,7 +493,7 @@ def similar_players():
         data = request.json
         
         # Validate required parameters
-        required_params = ['league', 'position', 'gp', 'g', 'a', 'points', 'ppg', 'ht', 'wt']
+        required_params = ['league', 'position', 'gp', 'g', 'a', 'points', 'ppg', 'ht', 'wt', 'age_rel_sep15']
         missing_params = [param for param in required_params if param not in data]
         
         if missing_params:
@@ -464,11 +509,12 @@ def similar_players():
         ppg = float(data['ppg'])
         ht = float(data['ht'])
         wt = int(data['wt'])
-        n_neighbors = int(data.get('n_neighbors', 3))
+        age_rel_sep15 = float(data['age_rel_sep15'])
+        n_neighbors = int(data.get('n_neighbors', 6))  # Default to 6 neighbors
         
         # Find similar players
         result = find_similar_players(
-            player_data, league, position, gp, g, a, points, ppg, ht, wt, n_neighbors
+            player_data, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, n_neighbors
         )
         
         # Convert to JSON-serializable format
@@ -511,14 +557,12 @@ def get_data_info():
         # Get basic info about the dataframe
         leagues = player_data['League'].unique().tolist() if 'League' in player_data.columns else []
         positions = player_data['Position'].unique().tolist() if 'Position' in player_data.columns else []
-        league_groups = player_data['League Group'].unique().tolist() if 'League Group' in player_data.columns else []
         
         info = {
             "rows": len(player_data),
             "columns": player_data.columns.tolist(),
             "leagues": leagues,
-            "positions": positions,
-            "league_groups": league_groups
+            "positions": positions
         }
         
         return jsonify(info)
@@ -526,7 +570,7 @@ def get_data_info():
     except Exception as e:
         return jsonify({"error": f"Error retrieving data info: {str(e)}"}), 500
 
-# Load the player data when the application starts (for local development)
+# Load the player data when the application starts
 if __name__ == '__main__':
     # Load the player data
     player_data = load_player_data()
@@ -540,5 +584,5 @@ if __name__ == '__main__':
     # Start the Flask application
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 else:
-    # For Vercel - load data when module is imported
+    # Load data when module is imported (for production use on Render)
     player_data = load_player_data()
