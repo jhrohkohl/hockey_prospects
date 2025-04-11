@@ -138,7 +138,9 @@ def get_league_avg_age(league):
     return LEAGUE_AVG_AGE.get(league.upper(), 20.0)
 
 
+
 def find_similar_players_dual_approach(df, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15):
+
     """
     Find similar players using two different approaches:
     1. Find 3 most similar players from the SAME league using [GPG, APG, PPG, Ht, Wt, Age Relative to Sep 15]
@@ -652,5 +654,7 @@ if __name__ == '__main__':
     # Start the Flask application
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
 else:
+
     # Load data when module is imported (for production use on Render)
     player_data = load_player_data()
+
