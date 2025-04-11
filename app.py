@@ -532,6 +532,7 @@ def index():
         "working_dir": os.getcwd(),
         "endpoints": {
             "/api/similar-players": "POST - Find similar players",
+            "/api/player-rankings": "POST - Get player stat rankings within their league",
             "/api/data-info": "GET - Get information about the loaded data",
             "/api/league-ages": "GET - Get average ages for each league"
         }
@@ -669,6 +670,118 @@ def get_data_info():
         
     except Exception as e:
         return jsonify({"error": f"Error retrieving data info: {str(e)}"}), 500
+
+@app.route('/api/player-rankings', methods=['POST'])
+def player_rankings():
+    """
+    Get the rankings of a player's stats (G, A, Points, GPG, APG, PPG) 
+    relative to all other player seasons in the same league with minimum 10 games played.
+    
+    Request body (JSON):
+    - league: str
+    - gp: int
+    - g: int
+    - a: int
+    - points: int
+    - ppg: float
+    
+    Returns:
+    --------
+    JSON response with the player's rank for each stat and the total number of eligible players in that league
+    """
+    global player_data
+    
+    # Lazy-load the data if it's not already loaded
+    if player_data is None:
+        player_data = load_player_data()
+        
+    if player_data is None:
+        return jsonify({"error": "No data loaded. Please check if the CSV file exists."}), 500
+    
+    try:
+        # Get parameters from request
+        data = request.json
+        
+        # Validate required parameters
+        required_params = ['league', 'gp', 'g', 'a', 'points', 'ppg']
+        missing_params = [param for param in required_params if param not in data]
+        
+        if missing_params:
+            return jsonify({"error": f"Missing required parameters: {', '.join(missing_params)}"}), 400
+        
+        # Extract and convert parameters
+        league = data['league']
+        gp = int(data['gp'])
+        g = int(data['g'])
+        a = int(data['a'])
+        points = int(data['points'])
+        ppg = float(data['ppg'])
+        
+        # Calculate GPG and APG for input player
+        input_gpg = g / gp if gp > 0 else 0
+        input_apg = a / gp if gp > 0 else 0
+        
+        # Filter dataframe to only include players from the same league with minimum 10 games played
+        league_df = player_data[(player_data['League'] == league) & (player_data['GP'] >= 10)].copy()
+        
+        if len(league_df) == 0:
+            return jsonify({"error": f"No players found in league {league} with at least 10 games played"}), 404
+        
+        # Calculate GPG and APG for all players in the league
+        league_df['GPG'] = league_df.apply(
+            lambda row: row['G'] / row['GP'] if pd.notna(row['G']) and pd.notna(row['GP']) and row['GP'] > 0 else 0, 
+            axis=1
+        )
+        
+        league_df['APG'] = league_df.apply(
+            lambda row: row['A'] / row['GP'] if pd.notna(row['A']) and pd.notna(row['GP']) and row['GP'] > 0 else 0, 
+            axis=1
+        )
+        
+        # Get the total count of eligible players
+        total_players = len(league_df)
+        
+        # Calculate rankings for each stat
+        # For each stat, we count how many players have a higher value (plus 1 to get the rank)
+        g_rank = 1 + len(league_df[league_df['G'] > g])
+        a_rank = 1 + len(league_df[league_df['A'] > a])
+        points_rank = 1 + len(league_df[league_df['Points'] > points])
+        gpg_rank = 1 + len(league_df[league_df['GPG'] > input_gpg])
+        apg_rank = 1 + len(league_df[league_df['APG'] > input_apg])
+        ppg_rank = 1 + len(league_df[league_df['PPG'] > ppg])
+        
+        # Return the rankings with total count
+        response = {
+            "goals": {
+                "rank": g_rank,
+                "total": total_players
+            },
+            "assists": {
+                "rank": a_rank,
+                "total": total_players
+            },
+            "points": {
+                "rank": points_rank,
+                "total": total_players
+            },
+            "goals_per_game": {
+                "rank": gpg_rank,
+                "total": total_players
+            },
+            "assists_per_game": {
+                "rank": apg_rank,
+                "total": total_players
+            },
+            "points_per_game": {
+                "rank": ppg_rank,
+                "total": total_players
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        return jsonify({"error": f"Error processing request: {str(e)}"}), 500
 
 # Load the player data when the application starts
 if __name__ == '__main__':
