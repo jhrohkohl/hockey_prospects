@@ -577,6 +577,81 @@ def similar_players():
     
     # Lazy-load the data if it's not already loaded
     if player_data is None:
+        player_data = load_player_data()
+        
+    if player_data is None:
+        return jsonify({"error": "No data loaded. Please check if the CSV file exists."}), 500
+    
+    try:
+        # Get parameters from request
+        data = request.json
+        
+        # Validate required parameters
+        required_params = ['league', 'position', 'gp', 'g', 'a', 'points', 'ppg', 'ht', 'wt', 'age_rel_sep15']
+        missing_params = [param for param in required_params if param not in data]
+        
+        if missing_params:
+            return jsonify({"error": f"Missing required parameters: {', '.join(missing_params)}"}), 400
+        
+        # Extract and convert parameters
+        league = data['league']
+        position = data['position']
+        gp = int(data['gp'])
+        g = int(data['g'])
+        a = int(data['a'])
+        points = int(data['points'])
+        ppg = float(data['ppg'])
+        ht = float(data['ht'])
+        wt = int(data['wt'])
+        age_rel_sep15 = float(data['age_rel_sep15'])
+        
+        # Get optional draft overall pick parameter
+        draft_overall_pick = None
+        if 'draft_overall_pick' in data and data['draft_overall_pick'] is not None:
+            try:
+                draft_overall_pick = int(data['draft_overall_pick'])
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid draft_overall_pick value: {data['draft_overall_pick']}")
+        
+        # Find similar players using the dual approach
+        result = find_similar_players_dual_approach(
+            player_data, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, draft_overall_pick
+        )
+        
+        # Convert to JSON-serializable format
+        if result.empty:
+            return jsonify([])
+        
+        # Convert the result to a list of dictionaries
+        result_dict = result.to_dict(orient='records')
+        
+        # Convert NaN values to None for JSON serialization
+        for i in range(len(result_dict)):
+            for key, value in result_dict[i].items():
+                if pd.isna(value):
+                    result_dict[i][key] = None
+        
+        return jsonify(result_dict)
+        
+    except Exception as e:
+        return jsonify({"error": f"Error processing request: {str(e)}"}), 500
+
+@app.route('/api/data-info', methods=['GET'])
+def get_data_info():
+    """
+    Get information about the loaded data.
+    
+    Returns:
+    --------
+    JSON response with data information
+    """
+    global player_data
+    
+    # Lazy-load the data if it's not already loaded
+    if player_data is None:
+        player_data = load_player_data()
+        
+    if player_data is None:
         return jsonify({"error": "No data loaded. Please check if the CSV file exists."}), 500
     
     try:
@@ -736,78 +811,3 @@ if __name__ == '__main__':
 else:
     # Load data when module is imported (for production use on Render)
     player_data = load_player_data()
-        player_data = load_player_data()
-        
-    if player_data is None:
-        return jsonify({"error": "No data loaded. Please check if the CSV file exists."}), 500
-    
-    try:
-        # Get parameters from request
-        data = request.json
-        
-        # Validate required parameters
-        required_params = ['league', 'position', 'gp', 'g', 'a', 'points', 'ppg', 'ht', 'wt', 'age_rel_sep15']
-        missing_params = [param for param in required_params if param not in data]
-        
-        if missing_params:
-            return jsonify({"error": f"Missing required parameters: {', '.join(missing_params)}"}), 400
-        
-        # Extract and convert parameters
-        league = data['league']
-        position = data['position']
-        gp = int(data['gp'])
-        g = int(data['g'])
-        a = int(data['a'])
-        points = int(data['points'])
-        ppg = float(data['ppg'])
-        ht = float(data['ht'])
-        wt = int(data['wt'])
-        age_rel_sep15 = float(data['age_rel_sep15'])
-        
-        # Get optional draft overall pick parameter
-        draft_overall_pick = None
-        if 'draft_overall_pick' in data and data['draft_overall_pick'] is not None:
-            try:
-                draft_overall_pick = int(data['draft_overall_pick'])
-            except (ValueError, TypeError):
-                print(f"Warning: Invalid draft_overall_pick value: {data['draft_overall_pick']}")
-        
-        # Find similar players using the dual approach
-        result = find_similar_players_dual_approach(
-            player_data, league, position, gp, g, a, points, ppg, ht, wt, age_rel_sep15, draft_overall_pick
-        )
-        
-        # Convert to JSON-serializable format
-        if result.empty:
-            return jsonify([])
-        
-        # Convert the result to a list of dictionaries
-        result_dict = result.to_dict(orient='records')
-        
-        # Convert NaN values to None for JSON serialization
-        for i in range(len(result_dict)):
-            for key, value in result_dict[i].items():
-                if pd.isna(value):
-                    result_dict[i][key] = None
-        
-        return jsonify(result_dict)
-        
-    except Exception as e:
-        return jsonify({"error": f"Error processing request: {str(e)}"}), 500
-
-@app.route('/api/data-info', methods=['GET'])
-def get_data_info():
-    """
-    Get information about the loaded data.
-    
-    Returns:
-    --------
-    JSON response with data information
-    """
-    global player_data
-    
-    # Lazy-load the data if it's not already loaded
-    if player_data is None:
-        player_data = load_player_data()
-        
-    if player_data is None:
